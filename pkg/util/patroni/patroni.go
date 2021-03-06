@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	failoverPath = "/failover"
-	configPath   = "/config"
-	apiPort      = 8008
-	timeout      = 30 * time.Second
+	failoverPath   = "/failover"
+	switchoverPath = "/switchover"
+	configPath     = "/config"
+	apiPort        = 8008
+	timeout        = 30 * time.Second
 )
 
 // Interface describe patroni methods
@@ -103,9 +104,19 @@ func (p *Patroni) httpPostOrPatch(method string, url string, body *bytes.Buffer)
 	return nil
 }
 
-// Switchover by calling Patroni REST API
-func (p *Patroni) Switchover(master *v1.Pod, candidate string) error {
+func switchoverFailover(p *Patroni, master *v1.Pod, candidate string, switchover bool) error {
 	buf := &bytes.Buffer{}
+	if switchover {
+		err := json.NewEncoder(buf).Encode(map[string]string{"leader": master.Name})
+		if err != nil {
+			return fmt.Errorf("could not encode json: %v", err)
+		}
+		apiURLString, err := apiURL(master)
+		if err != nil {
+			return err
+		}
+		return p.httpPostOrPatch(http.MethodPost, apiURLString+switchoverPath, buf)
+	}
 	err := json.NewEncoder(buf).Encode(map[string]string{"leader": master.Name, "member": candidate})
 	if err != nil {
 		return fmt.Errorf("could not encode json: %v", err)
@@ -115,6 +126,24 @@ func (p *Patroni) Switchover(master *v1.Pod, candidate string) error {
 		return err
 	}
 	return p.httpPostOrPatch(http.MethodPost, apiURLString+failoverPath, buf)
+}
+
+// Switchover by calling Patroni REST API
+func (p *Patroni) Switchover(master *v1.Pod, candidate string) error {
+	err := switchoverFailover(p, master, candidate, true)
+	if err != nil {
+		time.Sleep(1000 * time.Millisecond)
+		err = switchoverFailover(p, master, candidate, true)
+	}
+	if err != nil {
+		time.Sleep(1000 * time.Millisecond)
+		err = switchoverFailover(p, master, candidate, true)
+	}
+	if err != nil {
+		time.Sleep(1000 * time.Millisecond)
+		err = switchoverFailover(p, master, candidate, false)
+	}
+	return err
 }
 
 //TODO: add an option call /patroni to check if it is necessary to restart the server

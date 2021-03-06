@@ -362,6 +362,16 @@ func (c *Cluster) compareStatefulSetWith(statefulSet *appsv1.StatefulSet) *compa
 	if !reflect.DeepEqual(c.Statefulset.Annotations, statefulSet.Annotations) {
 		match = false
 		reasons = append(reasons, "new statefulset's annotations do not match the current one")
+		// b := new(bytes.Buffer)
+		// for key, value := range c.Statefulset.Annotations {
+		// 	fmt.Fprintf(b, "%s=\"%s\"\n", key, value)
+		// }
+		// c.logger.Infof("statefulset annotations %s", b.String())
+		// b = new(bytes.Buffer)
+		// for key, value := range statefulSet.Annotations {
+		// 	fmt.Fprintf(b, "%s=\"%s\"\n", key, value)
+		// }
+		// c.logger.Infof("required annotations %s", b.String())
 	}
 
 	needsRollUpdate, reasons = c.compareContainers("initContainers", c.Statefulset.Spec.Template.Spec.InitContainers, statefulSet.Spec.Template.Spec.InitContainers, needsRollUpdate, reasons)
